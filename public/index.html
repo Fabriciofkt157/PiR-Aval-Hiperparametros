@@ -18,7 +18,18 @@ main{max-width:640px;margin:0 auto;padding:14px 12px calc(96px + env(safe-area-i
 .dots button.cur{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)}
 .c{background:var(--card);border-radius:14px;padding:14px}
 .lab{color:var(--soft);font-size:13px;margin-bottom:6px}
-.dup{color:var(--soft);font-size:13px;margin:-6px 0 12px}
+.dup{color:var(--soft);font-size:13px;margin:0 0 12px}
+.lay{display:grid;grid-template-columns:minmax(0,1fr);gap:0 20px}
+.lay .prompt{grid-area:p}.lay .ref{grid-area:r}.lay .rest{grid-area:c;min-width:0}
+.lay{grid-template-areas:"p" "r" "c"}
+.ref{background:#eef6f1;border:1px solid #b9dcc9;border-left:4px solid var(--ok);border-radius:12px;padding:10px 12px;margin:0 0 14px;font-size:15px}
+.ref h3{margin:0 0 4px;font:600 12px system-ui;text-transform:uppercase;letter-spacing:.05em;color:var(--ok)}
+.ref p{margin:0;white-space:pre-wrap}
+@media(min-width:980px){
+  main{max-width:1040px}
+  .lay.hasref{grid-template-columns:minmax(0,1fr) 320px;grid-template-areas:"p r" "c r"}
+  .lay.hasref .ref{position:sticky;top:70px;align-self:start;margin:0}
+}
 .tx{white-space:pre-wrap;font-size:17px;margin-bottom:16px;min-height:3em}
 .row{margin-bottom:12px}.row small{display:flex;justify-content:space-between;color:var(--soft);font-size:13px;margin-bottom:4px}
 .row div{display:flex;gap:6px}
@@ -63,7 +74,8 @@ async function go(p){
   if(p+1<order.length)api('question','&idx='+order[p+1]).catch(()=>0);
 }
 function render(){
-  $('#app').innerHTML='<div class="prompt"></div><div class="dup" hidden></div><div class="dots"></div><div class="c"><div class="lab"></div><div class="tx"></div><div id="rows"></div><div class="tot" id="tot"></div></div>';
+  $('#app').innerHTML='<div class="lay'+(q.ref?' hasref':'')+'"><div class="prompt"></div>'+(q.ref?'<aside class="ref"><h3>Referência factual</h3><p></p></aside>':'')+'<div class="rest"><div class="dup" hidden></div><div class="dots"></div><div class="c"><div class="lab"></div><div class="tx"></div><div id="rows"></div><div class="tot" id="tot"></div></div></div></div>';
+  if(q.ref)$('.ref p').textContent=q.ref;
   $('.prompt').textContent=q.prompt;
   if(q.texts.length<q.total){const d=$('.dup');d.hidden=false;d.textContent=`Respostas idênticas foram unidas: ${q.total} respostas viraram ${q.texts.length} distintas. Cada nota vale para todas as cópias.`}
   $('.dots').innerHTML=q.texts.map((_,i)=>`<button data-d="${i}">${i+1}</button>`).join('');
