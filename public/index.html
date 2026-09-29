@@ -18,6 +18,7 @@ main{max-width:640px;margin:0 auto;padding:14px 12px calc(96px + env(safe-area-i
 .dots button.cur{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)}
 .c{background:var(--card);border-radius:14px;padding:14px}
 .lab{color:var(--soft);font-size:13px;margin-bottom:6px}
+.dup{color:var(--soft);font-size:13px;margin:-6px 0 12px}
 .tx{white-space:pre-wrap;font-size:17px;margin-bottom:16px;min-height:3em}
 .row{margin-bottom:12px}.row small{display:flex;justify-content:space-between;color:var(--soft);font-size:13px;margin-bottom:4px}
 .row div{display:flex;gap:6px}
@@ -62,8 +63,9 @@ async function go(p){
   if(p+1<order.length)api('question','&idx='+order[p+1]).catch(()=>0);
 }
 function render(){
-  $('#app').innerHTML='<div class="prompt"></div><div class="dots"></div><div class="c"><div class="lab"></div><div class="tx"></div><div id="rows"></div><div class="tot" id="tot"></div></div>';
+  $('#app').innerHTML='<div class="prompt"></div><div class="dup" hidden></div><div class="dots"></div><div class="c"><div class="lab"></div><div class="tx"></div><div id="rows"></div><div class="tot" id="tot"></div></div>';
   $('.prompt').textContent=q.prompt;
+  if(q.texts.length<q.total){const d=$('.dup');d.hidden=false;d.textContent=`Respostas idênticas foram unidas: ${q.total} respostas viraram ${q.texts.length} distintas. Cada nota vale para todas as cópias.`}
   $('.dots').innerHTML=q.texts.map((_,i)=>`<button data-d="${i}">${i+1}</button>`).join('');
   $('#rows').innerHTML=CAT.map((n,k)=>`<div class="row"><small><span>${n}</span><span>${LOW[0]?'0 = errado · 5 = perfeito':''}</span></small><div>${[0,1,2,3,4,5].map(v=>`<button data-k="${k}" data-v="${v}">${v}</button>`).join('')}</div></div>`).join('');
   paint();
