@@ -21,12 +21,15 @@ let branchOk = false;
 async function ensureBranch() {
   if (branchOk) return;
   if (!(await gh(`git/ref/heads/${B}`)).ok) {
-    const def = (await (await gh("")).json()).default_branch;
-    const ref = await (await gh(`git/ref/heads/${def}`)).json();
+    const repo = await (await gh("")).json();
+    if (!repo.default_branch) throw new Error("GitHub: " + (repo.message || "repo não encontrado") + " (repo=" + R + ")");
+    const ref = await (await gh(`git/ref/heads/${repo.default_branch}`)).json();
+    if (!ref.object) throw new Error("GitHub: " + (ref.message || "branch principal sem commits"));
     await gh("git/refs", { method: "POST", body: JSON.stringify({ ref: `refs/heads/${B}`, sha: ref.object.sha }) });
   }
   branchOk = true;
 }
+
 async function read(path) {
   await ensureBranch();
   const r = await gh(`contents/${path}?ref=${B}`);
