@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Avaliação Cega - Modelos LoRA</title>
+<style>
+    :root { --bg: #1e1e2e; --text: #cdd6f4; --card: #313244; --accent: #89b4fa; --hover: #45475a; }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    select, button, input[type="file"] { padding: 10px; border-radius: 6px; border: 1px solid var(--hover); background: var(--card); color: var(--text); cursor: pointer; }
+    button { background: var(--accent); color: var(--bg); font-weight: bold; border: none; }
+    button:hover { opacity: 0.9; }
+    .prompt-box { background: var(--card); padding: 20px; border-radius: 8px; margin-bottom: 20px; font-size: 1.1em; border-left: 4px solid var(--accent); }
+    .response-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 15px; }
+    .response-card { background: var(--card); padding: 15px; border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between; }
+    .score-group { margin-top: 10px; }
+    .score-label { display: block; font-size: 0.9em; margin-bottom: 5px; color: #a6adc8; }
+    .btn-group { display: flex; gap: 4px; }
+    .btn-score { flex: 1; padding: 8px 0; text-align: center; background: var(--bg); border: 1px solid var(--hover); border-radius: 4px; user-select: none; }
+    .btn-score.active { background: var(--accent); color: var(--bg); font-weight: bold; border-color: var(--accent); }
+    .nav-buttons { margin-top: 30px; display: flex; justify-content: space-between; }
+    .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h2>Avaliação - $\pi R$</h2>
+        <div>
+            <select id="evaluatorName">
+                <option value="">Selecione o Avaliador</option>
+                <option value="Avaliador_1">Avaliador 1</option>
+                <option value="Avaliador_2">Avaliador 2</option>
+                <option value="Avaliador_3">Avaliador 3</option>
+                <option value="Avaliador_4">Avaliador 4</option>
+            </select>
+            <input type="file" id="fileInput" multiple accept=".jsonl">
+        </div>
+    </div>
+
+    <div id="workspace" class="hidden">
+        <div class="prompt-box">
+            <strong>Prompt (<span id="progressIndicator"></span>):</strong> <span id="promptText"></span>
+        </div>
+        <div class="response-grid" id="responseContainer"></div>
+        
+        <div class="nav-buttons">
+            <button id="btnPrev" onclick="navigate(-1)">Anterior</button>
+            <div>
+                <button onclick="downloadJSON()">Baixar JSON</button>
+                <button onclick="sendToServer()">Salvar no Servidor</button>
+            </div>
+            <button id="btnNext" onclick="navigate(1)">Próxima</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let groupedData = {}; 
+    let promptKeys = [];
+    let currentIndex = 0;
+    let evaluations = {}; 
+
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+        const files = e.target.files;
+        if (files.length === 0) return;
+        
+        groupedData = {};
+        for (let file of files) {
+            const text = await file.text();
+            const lines = text.split('\n').filter(l => l.trim());
+            for (let line of lines) {
+                try {
+                    const obj = JSON.parse(line);
+                    if (!groupedData[obj.idx]) {
+                        groupedData[obj.idx] = { prompt: obj.prompt, responses: [] };
+                    }
+                    groupedData[obj.idx].responses.push(obj);
+                } catch(err) {}
+            }
+        }
+        
+        promptKeys = Object.keys(groupedData).sort((a,b) => a - b);
+        promptKeys.forEach(key => {
+            groupedData[key].responses = shuffleArray(groupedData[key].responses);
+        });
+        
+        document.getElementById('workspace').classList.remove('hidden');
+        renderPrompt(0);
+    });
+
+    function shuffleArray(array) {
+        let curId = array.length;
+        while (0 !== curId) {
+            let randId = Math.floor(Math.random() * curId);
+            curId -= 1;
+            let tmp = array[curId];
+            array[curId] = array[randId];
+            array[randId] = tmp;
+        }
+        return array;
+    }
+
+    function renderPrompt(index) {
+        currentIndex = index;
+        const key = promptKeys[index];
+        const data = groupedData[key];
+        
+        document.getElementById('progressIndicator').innerText = `${index + 1} / ${promptKeys.length}`;
+        document.getElementById('promptText').innerText = data.prompt;
+        
+        const container = document.getElementById('responseContainer');
+        container.innerHTML = '';
+        
+        data.responses.forEach((resp, rIdx) => {
+            const card = document.createElement('div');
+            card.className = 'response-card';
+            
+            const evalKey = `${key}_${resp.modelo}`;
+            if (!evaluations[evalKey]) {
+                evaluations[evalKey] = { idx: resp.idx, modelo: resp.modelo, factual: null, persona: null, escrita: null };
+            }
+            const currentEval = evaluations[evalKey];
+
+            card.innerHTML = `
+                <p style="font-size: 0.95em; margin-top: 0;">${resp.resposta}</p>
+                <div>
+                    ${createScoreGroup(evalKey, 'factual', 'Precisão Factual (0-5)', currentEval.factual)}
+                    ${createScoreGroup(evalKey, 'persona', 'Adequação à Persona (0-5)', currentEval.persona)}
+                    ${createScoreGroup(evalKey, 'escrita', 'Escrita (PT-BR) (0-5)', currentEval.escrita)}
+                </div>
+            `;
+            container.appendChild(card);
+        });
+
+        document.getElementById('btnPrev').disabled = index === 0;
+        document.getElementById('btnNext').innerText = index === promptKeys.length - 1 ? 'Finalizar' : 'Próxima';
+    }
+
+    function createScoreGroup(evalKey, category, label, currentValue) {
+        let html = `<div class="score-group"><span class="score-label">${label}</span><div class="btn-group">`;
+        for (let i = 0; i <= 5; i++) {
+            const active = currentValue === i ? 'active' : '';
+            html += `<div class="btn-score ${active}" onclick="setScore('${evalKey}', '${category}', ${i}, this)">${i}</div>`;
+        }
+        html += `</div></div>`;
+        return html;
+    }
+
+    window.setScore = function(evalKey, category, value, element) {
+        evaluations[evalKey][category] = value;
+        const siblings = element.parentNode.children;
+        for (let sib of siblings) sib.classList.remove('active');
+        element.classList.add('active');
+    };
+
+    window.navigate = function(dir) {
+        const newIndex = currentIndex + dir;
+        if (newIndex >= 0 && newIndex < promptKeys.length) {
+            renderPrompt(newIndex);
+            window.scrollTo(0, 0);
+        }
+    };
+
+    function getExportData() {
+        const evaluator = document.getElementById('evaluatorName').value || "Anonimo";
+        return {
+            avaliador: evaluator,
+            timestamp: new Date().toISOString(),
+            avaliacoes: Object.values(evaluations).map(e => ({
+                ...e,
+                total: (e.factual || 0) + (e.persona || 0) + (e.escrita || 0)
+            }))
+        };
+    }
+
+    window.downloadJSON = function() {
+        const data = getExportData();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `avaliacoes_${data.avaliador}.json`;
+        a.click();
+    };
+
+    window.sendToServer = function() {
+        const data = getExportData();
+        fetch('http://127.0.0.1:5000/salvar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        }).then(res => {
+            if(res.ok) alert('Avaliações salvas com sucesso no servidor!');
+            else alert('Erro ao salvar no servidor.');
+        }).catch(err => alert('Falha na conexão com o servidor.'));
+    };
+</script>
+</body>
+</html>
