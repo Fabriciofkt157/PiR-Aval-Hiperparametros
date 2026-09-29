@@ -16,7 +16,8 @@ function slots(id, idx) {
   return a;
 }
 
-const gh = (p, o = {}) => fetch(`https://api.github.com/repos/${R}/${p}`, { ...o, headers: { Authorization: `Bearer ${T}`, Accept: "application/vnd.github+json", "Content-Type": "application/json" } });
+const gh = (p, o = {}) => fetch(`https://api.github.com/repos/${R}${p ? "/" + p : ""}`, { ...o, headers: { Authorization: `Bearer ${T}`, Accept: "application/vnd.github+json", "Content-Type": "application/json" } });
+
 let branchOk = false;
 async function ensureBranch() {
   if (branchOk) return;
