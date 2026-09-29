@@ -38,7 +38,7 @@ module.exports = async (req, res) => {
         const same = rs.every((r) => r && r.f === rs[0].f && r.p === rs[0].p && r.e === rs[0].e);
         return same ? [rs[0].f, rs[0].p, rs[0].e] : [null, null, null];
       }) : null;
-      return res.json({ idx: q.idx, prompt: q.prompt, texts: g.map((x) => x.text), total: Q.models.length, saved });
+      return res.json({ idx: q.idx, prompt: q.prompt, texts: g.map((x) => x.text), total: Q.models.length, ref: q.ref || null, saved });
     }
     if (a === "rate" && req.method === "POST") {
       const { idx, scores } = req.body || {}, q = byIdx(idx);
