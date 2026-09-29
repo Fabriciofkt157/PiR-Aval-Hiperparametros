@@ -16,6 +16,18 @@ function slots(id, idx) {
   return a;
 }
 
+// Agrupa respostas com texto EXATAMENTE igual. A ordem dos grupos segue a ordem embaralhada (secreta) do avaliador,
+// então nada revela quais modelos foram agrupados. Cada grupo: { text, models: [nomes dos modelos] }.
+function groups(id, idx) {
+  const q = Q.questions.find((x) => x.idx === +idx), byText = new Map(), out = [];
+  for (const m of slots(id, idx)) {
+    const t = q.r[m];
+    if (!byText.has(t)) { const g = { text: t, models: [] }; byText.set(t, g); out.push(g); }
+    byText.get(t).models.push(m);
+  }
+  return out;
+}
+
 const gh = (p, o = {}) => fetch(`https://api.github.com/repos/${R}${p ? "/" + p : ""}`, { ...o, headers: { Authorization: `Bearer ${T}`, Accept: "application/vnd.github+json", "Content-Type": "application/json" } });
 
 let branchOk = false;
@@ -57,4 +69,4 @@ async function save(id, idx, rows) {
     } catch (e) { if (![409, 422].includes(e.status) || t === 4) throw e; }
   }
 }
-module.exports = { Q, who, evaluators, order, slots, load, save };
+module.exports = { Q, who, evaluators, order, slots, groups, load, save };
