@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Avaliação cega · πR</title>
+<style>
+:root{--bg:#e8edf0;--card:#fff;--ink:#16222b;--soft:#5b6b76;--line:#cfd8de;--acc:#1f4fd8;--ok:#1a7f5a}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,sans-serif;touch-action:manipulation}
+header{position:sticky;top:0;z-index:5;background:var(--ink);color:#fff;padding:8px 12px;display:flex;gap:8px;align-items:center}
+header b{font-size:15px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header button,header select{background:#26363f;color:#fff;border:1px solid #3b4d58;border-radius:8px;padding:7px 10px;font:inherit;font-size:14px;max-width:46vw}
+#bar{height:4px;background:#2c3d47}#bar i{display:block;height:100%;background:#4ade9b;width:0}
+main{max-width:640px;margin:0 auto;padding:14px 12px calc(96px + env(safe-area-inset-bottom))}
+.prompt{font:600 20px/1.3 Georgia,'Iowan Old Style',serif;margin:2px 0 12px}
+.dots{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.dots button{width:36px;height:36px;border-radius:50%;border:2px solid var(--line);background:#fff;font:600 14px system-ui;color:var(--soft);padding:0}
+.dots button.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.dots button.cur{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)}
+.c{background:var(--card);border-radius:14px;padding:14px}
+.lab{color:var(--soft);font-size:13px;margin-bottom:6px}
+.tx{white-space:pre-wrap;font-size:17px;margin-bottom:16px;min-height:3em}
+.row{margin-bottom:12px}.row small{display:flex;justify-content:space-between;color:var(--soft);font-size:13px;margin-bottom:4px}
+.row div{display:flex;gap:6px}
+.row button{flex:1;height:52px;border:1px solid var(--line);background:#f4f7f8;border-radius:10px;font:600 18px system-ui;color:var(--ink);padding:0}
+.row button:active{background:#dbe4ff}.row button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.tot{text-align:right;font:700 20px Georgia,serif}.tot span{font:13px system-ui;color:var(--soft)}
+footer{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px;align-items:center;justify-content:center}
+footer button{border:0;border-radius:10px;height:48px;font:600 16px system-ui;background:#e8edf0;color:var(--ink);padding:0 16px}
+footer #save{flex:1;max-width:340px;background:var(--acc);color:#fff}footer #save:disabled{background:#b5c0c7}
+#msg{color:var(--soft);font-size:13px;text-align:center;min-width:64px}
+#err{max-width:520px;margin:80px auto;text-align:center;padding:0 16px}
+</style></head><body>
+<header><b id="who">Avaliação cega · πR</b><select id="jump"></select><button id="dl" title="Baixar meu JSON">⤓ JSON</button></header>
+<div id="bar"><i></i></div><main id="app"></main>
+<footer id="ft" hidden><button id="prev">‹</button><span id="msg"></span><button id="next">›</button><button id="save" disabled>Salvar e próxima</button></footer>
+<script>
+const K=new URLSearchParams(location.search).get('k')||localStorage.getItem('k');
+const CAT=['Precisão factual','Persona','Português'],LOW=['errado','','','','','perfeito'];
+let S,order,done,pos,q,sc,cur=0,busy=false;
+const $=s=>document.querySelector(s);
+const api=(a,x='',body)=>fetch(`/api/${a}?k=${encodeURIComponent(K)}${x}`,body&&{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j});
+const fail=m=>{$('#app').innerHTML=`<div id="err"><h2>Não foi possível entrar</h2><p>${m}</p><p>Use o link pessoal enviado a você (com <code>?k=…</code>).</p></div>`;$('#ft').hidden=true};
+const full=r=>r.every(v=>v!==null);
+
+async function init(){
+  if(!K)return fail('Código de acesso ausente.');
+  try{S=await api('session')}catch(e){return fail(e.message)}
+  localStorage.setItem('k',K);history.replaceState(0,'','?k='+K);
+  order=S.order;done=new Set(S.done);$('#who').textContent='Olá, '+S.id;$('#ft').hidden=false;
+  $('#jump').innerHTML=order.map((_,i)=>`<option value="${i}"></option>`).join('');
+  const f=order.findIndex(i=>!done.has(i));go(f<0?0:f);
+}
+function prog(){
+  $('#bar i').style.width=100*done.size/order.length+'%';
+  [...$('#jump').options].forEach((o,i)=>o.textContent=`Pergunta ${i+1}/${order.length}${done.has(order[i])?' ✓':''}`);$('#jump').value=pos;
+}
+async function go(p){
+  if(busy||p<0||p>=order.length)return;pos=p;prog();$('#app').innerHTML='<p>Carregando…</p>';
+  try{q=await api('question','&idx='+order[p])}catch(e){return fail(e.message)}
+  sc=q.saved||q.texts.map(()=>[null,null,null]);
+  const f=sc.findIndex(r=>!full(r));cur=f<0?0:f;render();window.scrollTo(0,0);
+  if(p+1<order.length)api('question','&idx='+order[p+1]).catch(()=>0);
+}
+function render(){
+  $('#app').innerHTML='<div class="prompt"></div><div class="dots"></div><div class="c"><div class="lab"></div><div class="tx"></div><div id="rows"></div><div class="tot" id="tot"></div></div>';
+  $('.prompt').textContent=q.prompt;
+  $('.dots').innerHTML=q.texts.map((_,i)=>`<button data-d="${i}">${i+1}</button>`).join('');
+  $('#rows').innerHTML=CAT.map((n,k)=>`<div class="row"><small><span>${n}</span><span>${LOW[0]?'0 = errado · 5 = perfeito':''}</span></small><div>${[0,1,2,3,4,5].map(v=>`<button data-k="${k}" data-v="${v}">${v}</button>`).join('')}</div></div>`).join('');
+  paint();
+}
+function paint(){
+  const r=sc[cur];
+  $('.lab').textContent=`Resposta ${cur+1} de ${sc.length}`;$('.tx').textContent=q.texts[cur];
+  document.querySelectorAll('.dots button').forEach((b,i)=>{b.classList.toggle('ok',full(sc[i]));b.classList.toggle('cur',i===cur)});
+  document.querySelectorAll('#rows .row').forEach((row,k)=>row.querySelectorAll('button').forEach(b=>b.classList.toggle('on',+b.dataset.v===r[k])));
+  $('#tot').innerHTML=full(r)?`${r[0]+r[1]+r[2]}<span> / 15</span>`:'';
+  const n=sc.filter(full).length,all=n===sc.length;
+  $('#msg').textContent=`${n}/${sc.length}`;$('#save').disabled=!all||busy;
+  $('#save').textContent=all?(pos===order.length-1?'Salvar ✓':'Salvar e próxima'):`Faltam ${sc.length-n} respostas`;
+}
+function put(k,v){
+  const was=full(sc[cur]);sc[cur][k]=v;paint();
+  if(!was&&full(sc[cur])){ // avança sozinho para a próxima resposta sem nota
+    const nx=sc.findIndex((r,i)=>i>cur&&!full(r)),any=sc.findIndex(r=>!full(r));
+    const t=nx>=0?nx:any;if(t>=0)setTimeout(()=>{cur=t;paint()},220);
+  }
+}
+$('#app').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.d!==undefined){cur=+b.dataset.d;paint()}else if(b.dataset.v!==undefined)put(+b.dataset.k,+b.dataset.v)});
+addEventListener('keydown',e=>{
+  if(!q||e.target.tagName==='SELECT'||e.ctrlKey||e.metaKey)return;
+  if(/^[0-5]$/.test(e.key)){const k=sc[cur].indexOf(null);put(k<0?2:k,+e.key)}
+  else if(e.key==='ArrowRight'){cur=Math.min(cur+1,sc.length-1);paint()}
+  else if(e.key==='ArrowLeft'){cur=Math.max(cur-1,0);paint()}
+  else if(e.key==='Enter'&&!$('#save').disabled)save();
+});
+async function save(){
+  busy=true;paint();$('#msg').textContent='…';
+  try{await api('rate','',{idx:q.idx,scores:sc});done.add(q.idx);busy=false;
+    if(pos+1<order.length)go(pos+1);else{prog();paint();$('#msg').textContent='✓'}}
+  catch(e){busy=false;paint();alert('Não salvou: '+e.message+'\nSuas notas continuam na tela — toque em salvar de novo.')}
+}
+$('#save').onclick=save;$('#prev').onclick=()=>{cur=Math.max(cur-1,0);paint()};$('#next').onclick=()=>{cur=Math.min(cur+1,sc.length-1);paint()};
+$('#jump').onchange=e=>{e.target.blur();go(+e.target.value)};
+$('#dl').onclick=()=>location.href=`/api/mine?k=${encodeURIComponent(K)}`;
+init();
+</script></body></html>
